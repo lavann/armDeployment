@@ -1,0 +1,259 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.1",
+    "parameters": {
+        "rgNamePrefix": {
+            "type": "string"
+        },
+        "instanceCount": {
+            "type": "int"
+        },
+        "rgLocationArr":{
+            "type": "array"
+        },
+        "webApp":{
+            "type": "string"
+        },
+        "defaultConsistencyLevel":{
+          "type": "string",
+          "metadata": {
+              "description": "consistancy level for the  database"
+          }
+        },
+        "databaseOfferType":{
+          "type": "string"
+        },
+         "sharedStorageName":{
+             "type": "string"
+         },
+         "uniqueDnsName":{
+             "type": "string"
+         },
+         "sharedLocation":{
+             "type": "string"
+         },
+         "publisherEmail":{
+             "type": "string"
+         },
+         "publisherName":{
+             "type": "string"
+         },
+         "apimSku":{
+             "type": "string"
+         },
+         "apimSkuCount":{
+             "type": "int"
+         }
+    },
+    "variables": {
+        "appServicePlanName": "[concat('asp-',parameters('rgNamePrefix'))]",
+        "cosmosDbAccountName":"[concat('sql-',parameters('rgNamePrefix'))]",
+        "cosmosDbAccountName1":"[concat('sql-',parameters('rgNamePrefix'), '-shared')]",
+        "rgShared":"[concat(parameters('rgNamePrefix'),'-shared')]",
+        "apiManagementServiceName":"[concat('apim-',parameters('rgNamePrefix'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2018-05-01",
+            "location": "uksouth",
+            "name": "[variables('rgShared')]",
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-05-01",
+            "name": "sharedResources",
+            "resourceGroup": "[variables('rgShared')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups/', variables('rgShared'))]",
+                "deploy"             
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources":[
+                        {
+                            "type": "Microsoft.Storage/storageAccounts",
+                            "apiVersion": "2017-10-01",
+                            "name": "[parameters('sharedStorageName')]",
+                            "location": "uksouth",
+                            "kind": "StorageV2",
+                            "sku": {
+                                "name": "Standard_LRS"
+                            }
+                        },
+                        {
+                          "apiVersion": "2015-11-01",
+                          "type": "Microsoft.Network/trafficManagerProfiles",
+                          "name": "ab-lanallai-profile01",
+                          "location": "global",
+                          "dependsOn":[],
+                          "properties": {
+                            "profileStatus": "Enabled",
+                            "trafficRoutingMethod": "Performance",
+                            "dnsConfig": {
+                              "relativeName": "[parameters('uniqueDnsName')]",
+                              "ttl": 30
+                            },
+                            "monitorConfig": {
+                              "protocol": "HTTP",
+                              "port": 80,
+                              "path": "/"
+                            }
+                          }
+                        },
+                        {
+                            "apiVersion": "2017-03-01",
+                            "name": "[variables('apiManagementServiceName')]",
+                            "type": "Microsoft.ApiManagement/service",
+                            "location": "[parameters('sharedLocation')]",
+                            "tags": {},
+                            "sku": {
+                                "name": "[parameters('apimSku')]",
+                                "capacity": "[parameters('apimSkuCount')]"
+                            },
+                            "properties": {
+                                "publisherEmail": "[parameters('publisherEmail')]",
+                                "publisherName": "[parameters('publisherName')]"
+                            }
+                        },                        
+                        {
+                            "type": "Microsoft.DocumentDB/databaseAccounts",
+                            "apiVersion": "2015-04-08",
+                            "name": "[variables('cosmosDbAccountName1')]",
+                            "location": "[parameters('sharedLocation')]",
+                            "tags": {},
+                            "kind": "GlobalDocumentDB",
+                            "properties": {
+                              "consistencyPolicy": {
+                                "defaultConsistencyLevel": "Eventual",
+                                "maxStalenessPrefix": 1,
+                                "maxIntervalInSeconds": 5
+                              },
+                              "locations": [
+                                {
+                                  "locationName": "uksouth",
+                                  "failoverPriority": 0
+                                },
+                                {
+                                  "locationName": "ukwest",
+                                  "failoverPriority": 1
+                                }
+                              ],
+                              "databaseAccountOfferType": "Standard",
+                              "enableAutomaticFailover": true,
+                              "enableMultipleWriteLocations": true
+                            }
+                        }
+                    ]                    
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2018-05-01",
+            "location": "[parameters('rgLocationArr')[copyIndex()]]",
+            "name": "[concat(parameters('rgNamePrefix'),'-', copyIndex())]",
+            "copy": {
+                "name": "resourceGroupLoop",
+                "count": "[parameters('instanceCount')]"
+            },
+            "properties": {}
+        },
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2019-05-01",
+            "name":"deploy",  
+            "resourceGroup": "[concat(parameters('rgNamePrefix'), '-', copyIndex())]",
+            "copy": {
+                "name": "deploymentLoop",
+                "count": "[parameters('instanceCount')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Resources/resourceGroups/', concat(parameters('rgNamePrefix'), '-', copyIndex()))]"
+            ],
+            "properties":{
+                "mode":"Incremental",
+                "template":{
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.1",
+                    "resources":[
+                        {
+                            "apiVersion":"2018-11-01",
+                            "type":"Microsoft.Web/serverfarms",                                                                              
+                            "location":"[parameters('rgLocationArr')[copyIndex()]]",
+                            "name":"[concat(variables('appServicePlanName'), copyIndex())]",
+                            "sku":{
+                                "name":"S1",
+                                "capacity": 2
+                            },
+                            "kind": "app"
+                        },
+                        {
+                          "apiVersion": "2018-11-01",
+                          "type": "Microsoft.Web/sites",
+                          "location":"[parameters('rgLocationArr')[copyIndex()]]",
+                          "name":"[concat(parameters('webApp'), copyIndex())]",
+                          "comments": "web app",
+                          "tags": {
+                          },
+                          "dependsOn":[
+                            "[resourceId('Microsoft.Web/serverfarms', concat(variables('appServicePlanName'), copyIndex()))]"
+                          ],
+                          "properties": {
+                            "serverFarmId": "[concat(variables('appServicePlanName'), copyIndex())]"
+                          }
+                        }
+                    ]
+                }
+            }
+            
+        },
+        {
+            "apiVersion": "2019-05-01",
+            "name": "[concat('trafficManagerEndpoint', copyIndex())]",
+            "type": "Microsoft.Resources/deployments",
+            "dependsOn": [
+                "sharedResources",
+                "deploy"
+            ],
+            "resourceGroup": "[variables('rgShared')]",
+            "copy":{
+                "name":"tmprofilecopy",
+                "count":2
+            },
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [                       
+                        {
+                            "apiVersion": "2015-11-01",
+                            "type": "Microsoft.Network/trafficManagerProfiles/ExternalEndpoints",                           
+                            "location": "global",
+                            "name": "[concat('ab-lanallai-profile/',parameters('webApp'), copyIndex())]",
+                            "properties": {
+                                "resourceTargetId":"",
+                                "target": "[concat(parameters('webApp'), copyIndex(),'.azurewebsites.net')]",
+                                "endpointStatus": "Enabled",
+                                "endpointLocation": "[parameters('rgLocationArr')[copyIndex()]]"
+                               
+                                
+                            }
+                          }
+                    ]
+                },
+                "parameters": {}
+            }
+        }
+    ],
+    "outputs": {}
+}

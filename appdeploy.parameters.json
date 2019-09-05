@@ -1,0 +1,46 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "rgNamePrefix":{
+            "value": "ab-lanallai-02"
+        },
+        "instanceCount":{
+            "value": 2
+        },
+        "rgLocationArr":{
+            "value": ["uksouth", "ukwest"]
+        },
+        "webApp":{
+            "value": "ab-lanallai-webapp02"
+        },
+        "databaseOfferType":{
+          "value": "Standard"
+        },
+        "defaultConsistencyLevel":{
+          "value": "Eventual"
+        },
+        "sharedStorageName":{
+            "value": "ablanallaistoreapp02"
+        },
+        "uniqueDnsName": {
+            "value": "ablanallaiwebapp02"
+        },
+        "sharedLocation":{
+            "value": "uksouth"
+        },
+        "publisherEmail":{
+            "value": "lanallai@mirosoft.com"
+        },
+        "publisherName":{
+            "value": "Lavan Nallainathan"
+        },
+        "apimSku":{
+            "value": "Developer"
+        },
+        "apimSkuCount":{
+            "value": 1
+        }
+        
+    }
+}
